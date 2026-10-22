@@ -1,6 +1,6 @@
 # 截流获客工作台下载与更新
 
-此仓库仅用于公开发布安装包及更新清单，不包含私有业务源码、账号、Cookie、密钥或数据库。
+此仓库用于公开发布安装包及更新清单，不公开源码工程仓库及开发记录，不发布账号、Cookie、密钥或数据库。安装包包含运行所需的 JavaScript/Python 程序文件，可以被解包查看。
 
 安装包位于 [Releases](https://github.com/hgod8631-ops/jieliu-workbench-releases/releases)。
 

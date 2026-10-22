@@ -64,7 +64,7 @@ jobs:
           cat > notes.txt <<'TXT'
           Windows 更新器安装版。首次从 0.11.1 升级需完全退出旧版后手动安装一次，并选择原安装目录；之后可从窗口顶部或托盘检查更新。
           安装包与私有构建的大小、SHA256 完全一致。构建已在 Windows runner 验证合成数据保留；真实账号登录保持仍需用户电脑核验。
-          私有源码及用户账号、Cookie、密钥不在此仓库发布。安装包未做商业代码签名。
+          源码工程仓库保持私有；安装包包含运行所需程序文件，可被解包查看。用户账号、Cookie、密钥不随包发布。安装包未做商业代码签名。
           TXT
           gh release create "v$VERSION" "$name" "$name.sha256" windows-update.json --draft --title "Windows $VERSION" --notes-file notes.txt
           gh release edit "v$VERSION" --draft=false --latest
