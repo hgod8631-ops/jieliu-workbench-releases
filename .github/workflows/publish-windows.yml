@@ -1,18 +1,9 @@
-name: Publish verified Windows installer
+name: Publish verified Windows installers
 on:
   workflow_dispatch:
     inputs:
-      source_url:
-        description: Temporary GitHub release-assets download URL; installer only
-        required: true
-      version:
-        description: Verified version, for example 0.11.3
-        required: true
-      expected_sha256:
-        description: SHA256 from the completed private Windows build
-        required: true
-      expected_size:
-        description: Exact installer size in bytes
+      artifacts_json:
+        description: Verified full and optional lightweight assets, preferred type and version
         required: true
 permissions:
   contents: write
@@ -21,50 +12,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      SOURCE_URL: ${{ inputs.source_url }}
-      VERSION: ${{ inputs.version }}
-      EXPECTED_SHA256: ${{ inputs.expected_sha256 }}
-      EXPECTED_SIZE: ${{ inputs.expected_size }}
+      ARTIFACTS_JSON: ${{ inputs.artifacts_json }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_REPO: ${{ github.repository }}
     steps:
-      - name: Download and independently verify installer
-        shell: bash
-        run: |
-          echo "::add-mask::$SOURCE_URL"
-          python3 - <<'PY'
-          import os,re,urllib.request,urllib.parse,hashlib,json,pathlib,sys
-          v=os.environ['VERSION'];sha=os.environ['EXPECTED_SHA256'];size=int(os.environ['EXPECTED_SIZE']);url=os.environ['SOURCE_URL']
-          assert re.fullmatch(r'\d{1,6}\.\d{1,6}\.\d{1,6}',v)
-          assert re.fullmatch(r'[a-f0-9]{64}',sha) and 2<size<2*1024**3
-          u=urllib.parse.urlsplit(url)
-          assert u.scheme=='https' and u.hostname=='release-assets.githubusercontent.com' and not u.username and not u.password
-          class NoRedirect(urllib.request.HTTPRedirectHandler):
-              def redirect_request(self,*a,**k):return None
-          name=f'JieliuWorkbench-{v}-Windows-x64-Setup.exe'
-          h=hashlib.sha256();n=0
-          try:
-              with urllib.request.build_opener(NoRedirect).open(url,timeout=120) as r,open(name,'wb') as f:
-                  for b in iter(lambda:r.read(1024*1024),b''):
-                      n+=len(b)
-                      if n>size:raise ValueError('oversized download')
-                      h.update(b);f.write(b)
-          except Exception as e:sys.exit('Installer download failed: '+type(e).__name__)
-          assert n==size and h.hexdigest()==sha,'Installer checksum mismatch'
-          with open(name,'rb') as f:assert f.read(2)==b'MZ','Not a Windows executable'
-          manifest={'format':1,'platform':'win32','arch':'x64','version':v,'size':n,'sha256':sha,'url':f'https://github.com/{os.environ["GH_REPO"]}/releases/download/v{v}/{name}'}
-          pathlib.Path('windows-update.json').write_text(json.dumps(manifest,indent=2),encoding='utf8')
-          pathlib.Path(name+'.sha256').write_text(f'{sha}  {name}\n',encoding='utf8')
-          print('Verified installer:',name,n,sha)
-          PY
+      - uses: actions/checkout@v4
+      - name: Download and independently verify every installer
+        run: python3 scripts/verify-windows-release.py
       - name: Publish complete release with stable update manifest
         shell: bash
         run: |
-          name="JieliuWorkbench-$VERSION-Windows-x64-Setup.exe"
+          version=$(python3 -c 'import json;print(json.load(open("windows-update.json"))["version"])')
           cat > notes.txt <<'TXT'
-          Windows 更新器安装版。首次从 0.11.1 升级需完全退出旧版后手动安装一次，并选择原安装目录；之后可从窗口顶部或托盘检查更新。
-          安装包与私有构建的大小、SHA256 完全一致。构建已在 Windows runner 验证合成数据保留；真实账号登录保持仍需用户电脑核验。
-          源码工程仓库保持私有；安装包包含运行所需程序文件，可被解包查看。用户账号、Cookie、密钥不随包发布。安装包未做商业代码签名。
+          Windows 更新版。已有兼容运行环境时使用轻量 Update.exe；首次安装或修复请使用完整 Setup.exe。
+          软件“检查更新”按发布清单选择更新包，安装前请停止任务并退出工作台。
+          所有安装包在公开发布前独立核验大小和 SHA-256。用户账号、Cookie、密钥和业务数据不随包发布。
           TXT
-          gh release create "v$VERSION" "$name" "$name.sha256" windows-update.json --draft --title "Windows $VERSION" --notes-file notes.txt
-          gh release edit "v$VERSION" --draft=false --latest
+          gh release create "v$version" JieliuWorkbench-*.exe JieliuWorkbench-*.sha256 windows-update.json windows-distribution.json --draft --title "Windows $version" --notes-file notes.txt
+          gh release edit "v$version" --draft=false --latest
